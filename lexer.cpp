@@ -1,0 +1,51 @@
+#include "lexer.h"
+#include <cctype>
+using namespace std;
+
+vector<Token> tokenize(const string& line) {
+    vector<Token> tokens;
+    int i = 0;
+    int n = (int)line.size();
+
+    while (i < n) {
+        unsigned char c = line[i];
+
+        if (isspace(c)) { i++; continue; }
+
+        // Letter → scan word, then classify as keyword or variable
+        if (isalpha(c)) {
+            int start = i;
+            while (i < n && isalnum((unsigned char)line[i])) i++;
+            string word = line.substr(start, i - start);
+            if (word == "EXIT" && i < n && line[i] == '!') {
+                tokens.push_back({TokenType::KW_EXIT, "EXIT!"});
+                i++;
+            } else {
+                tokens.push_back({TokenType::VARIABLE, word});
+            }
+            continue;
+        }
+
+        // Digit → integer or float literal
+        if (isdigit(c)) {
+            int start = i;
+            while (i < n && isdigit((unsigned char)line[i])) i++;
+            bool is_float = false;
+            if (i < n && line[i] == '.') {
+                is_float = true;
+                i++;
+                while (i < n && isdigit((unsigned char)line[i])) i++;
+            }
+            tokens.push_back({is_float ? TokenType::FLOAT_LIT : TokenType::INT_LIT,
+                               line.substr(start, i - start)});
+            continue;
+        }
+
+        // Any other character → unknown token
+        int start = i;
+        while (i < n && !isspace((unsigned char)line[i])) i++;
+        tokens.push_back({TokenType::UNKNOWN, line.substr(start, i - start)});
+    }
+
+    return tokens;
+}
