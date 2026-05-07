@@ -3,7 +3,7 @@
 
 using namespace std;
 
-void executeCommand(const vector<Token>& tokens, SymTable& table, bool& should_exit) {
+void executeCommand(const vector<Token>& tokens, bool& should_exit) {
     if (tokens.empty()) return;
 
     // Report the first unknown word and stop
