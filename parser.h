@@ -1,5 +1,6 @@
 #pragma once
 #include "lexer.h"
-using namespace std;
+#include "symboltable.h"
+#include <vector>
 
-void executeCommand(const vector<Token>& tokens, bool& should_exit);
+void executeCommand(const std::vector<Token>& tokens, bool& should_exit, SymTable& symbols);

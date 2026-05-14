@@ -8,6 +8,15 @@ enum class TokenType {
     FLOAT_LIT,
     VARIABLE,
     KW_EXIT,
+    KW_BEG,
+    KW_PRINT,
+    OP_ASSIGN,
+    OP_ADD,
+    OP_SUB,
+    OP_MUL,
+    OP_DIV,
+    LPAREN,
+    RPAREN,
     UNKNOWN
 };
 
