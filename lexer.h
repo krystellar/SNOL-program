@@ -15,6 +15,7 @@ enum class TokenType {
     OP_SUB,
     OP_MUL,
     OP_DIV,
+    OP_MOD,
     LPAREN,
     RPAREN,
     UNKNOWN

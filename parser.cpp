@@ -1,26 +1,23 @@
 #include "parser.h"
 #include <iostream>
-#include <sstream>
 #include <optional>
+#include <cctype>
 
 using namespace std;
 
-// Forward declarations for expression evaluation
 struct EvalResult {
     VarType type;
     long long i_val;
     double f_val;
 };
 
-optional<EvalResult> evaluateExpression(const vector<Token>& tokens, size_t& pos, const SymTable& symbols);
+// Forward declarations
+optional<EvalResult> evaluateExpression(const vector<Token>& tokens, size_t& pos, const SymTable& symbols, bool& errPrinted);
+optional<EvalResult> parseTerm(const vector<Token>& tokens, size_t& pos, const SymTable& symbols, bool& errPrinted);
+optional<EvalResult> parseFactor(const vector<Token>& tokens, size_t& pos, const SymTable& symbols, bool& errPrinted);
 
-EvalResult castToFloat(EvalResult r) {
-    if (r.type == VarType::FLOAT) return r;
-    return {VarType::FLOAT, 0, (double)r.i_val};
-}
-
-optional<EvalResult> parseFactor(const vector<Token>& tokens, size_t& pos, const SymTable& symbols) {
-    if (pos >= tokens.size()) return std::nullopt;
+optional<EvalResult> parseFactor(const vector<Token>& tokens, size_t& pos, const SymTable& symbols, bool& errPrinted) {
+    if (pos >= tokens.size()) return nullopt;
 
     const Token& tok = tokens[pos];
     if (tok.type == TokenType::INT_LIT) {
@@ -32,51 +29,80 @@ optional<EvalResult> parseFactor(const vector<Token>& tokens, size_t& pos, const
     } else if (tok.type == TokenType::VARIABLE) {
         auto it = symbols.find(tok.value);
         if (it == symbols.end()) {
-            cout << "SNOL> Undefined variable [" << tok.value << "]\n";
-            return std::nullopt;
+            cout << "SNOL> Error! [" << tok.value << "] is not defined!\n";
+            errPrinted = true;
+            return nullopt;
         }
         pos++;
         return EvalResult{it->second.type, it->second.i_val, it->second.f_val};
     } else if (tok.type == TokenType::LPAREN) {
         pos++;
-        auto res = evaluateExpression(tokens, pos, symbols);
-        if (!res) return std::nullopt;
-        if (pos >= tokens.size() || tokens[pos].type != TokenType::RPAREN) return std::nullopt;
+        auto res = evaluateExpression(tokens, pos, symbols, errPrinted);
+        if (!res) return nullopt;
+        if (pos >= tokens.size() || tokens[pos].type != TokenType::RPAREN) return nullopt;
         pos++;
         return res;
     } else if (tok.type == TokenType::OP_SUB) {
         pos++;
-        auto res = parseFactor(tokens, pos, symbols);
-        if (!res) return std::nullopt;
+        auto res = parseFactor(tokens, pos, symbols, errPrinted);
+        if (!res) return nullopt;
         if (res->type == VarType::INTEGER) res->i_val = -res->i_val;
         else res->f_val = -res->f_val;
         return res;
     }
-    return std::nullopt;
+    return nullopt;
 }
 
-optional<EvalResult> parseTerm(const vector<Token>& tokens, size_t& pos, const SymTable& symbols) {
-    auto left = parseFactor(tokens, pos, symbols);
-    if (!left) return std::nullopt;
+optional<EvalResult> parseTerm(const vector<Token>& tokens, size_t& pos, const SymTable& symbols, bool& errPrinted) {
+    auto left = parseFactor(tokens, pos, symbols, errPrinted);
+    if (!left) return nullopt;
 
-    while (pos < tokens.size() && (tokens[pos].type == TokenType::OP_MUL || tokens[pos].type == TokenType::OP_DIV)) {
+    while (pos < tokens.size() &&
+           (tokens[pos].type == TokenType::OP_MUL ||
+            tokens[pos].type == TokenType::OP_DIV ||
+            tokens[pos].type == TokenType::OP_MOD)) {
         TokenType op = tokens[pos].type;
         pos++;
-        auto right = parseFactor(tokens, pos, symbols);
-        if (!right) return std::nullopt;
+        auto right = parseFactor(tokens, pos, symbols, errPrinted);
+        if (!right) return nullopt;
 
-        if (left->type == VarType::FLOAT || right->type == VarType::FLOAT) {
-            *left = castToFloat(*left);
-            *right = castToFloat(*right);
-            if (op == TokenType::OP_MUL) left->f_val *= right->f_val;
-            else {
-                if (right->f_val == 0) { cout << "SNOL> Division by zero error!\n"; return std::nullopt; }
+        if (left->type != right->type) {
+            cout << "SNOL> Error! Operands must be of the same type in an arithmetic operation!\n";
+            errPrinted = true;
+            return nullopt;
+        }
+        if (op == TokenType::OP_MOD) {
+            if (left->type == VarType::FLOAT) {
+                cout << "SNOL> Error! Modulo operation is only allowed for integer operands!\n";
+                errPrinted = true;
+                return nullopt;
+            }
+            if (right->i_val == 0) {
+                cout << "SNOL> Error! Division by zero!\n";
+                errPrinted = true;
+                return nullopt;
+            }
+            left->i_val %= right->i_val;
+        } else if (left->type == VarType::FLOAT) {
+            if (op == TokenType::OP_MUL) {
+                left->f_val *= right->f_val;
+            } else {
+                if (right->f_val == 0.0) {
+                    cout << "SNOL> Error! Division by zero!\n";
+                    errPrinted = true;
+                    return nullopt;
+                }
                 left->f_val /= right->f_val;
             }
         } else {
-            if (op == TokenType::OP_MUL) left->i_val *= right->i_val;
-            else {
-                if (right->i_val == 0) { cout << "SNOL> Division by zero error!\n"; return std::nullopt; }
+            if (op == TokenType::OP_MUL) {
+                left->i_val *= right->i_val;
+            } else {
+                if (right->i_val == 0) {
+                    cout << "SNOL> Error! Division by zero!\n";
+                    errPrinted = true;
+                    return nullopt;
+                }
                 left->i_val /= right->i_val;
             }
         }
@@ -84,19 +110,24 @@ optional<EvalResult> parseTerm(const vector<Token>& tokens, size_t& pos, const S
     return left;
 }
 
-optional<EvalResult> evaluateExpression(const vector<Token>& tokens, size_t& pos, const SymTable& symbols) {
-    auto left = parseTerm(tokens, pos, symbols);
-    if (!left) return std::nullopt;
+optional<EvalResult> evaluateExpression(const vector<Token>& tokens, size_t& pos, const SymTable& symbols, bool& errPrinted) {
+    auto left = parseTerm(tokens, pos, symbols, errPrinted);
+    if (!left) return nullopt;
 
-    while (pos < tokens.size() && (tokens[pos].type == TokenType::OP_ADD || tokens[pos].type == TokenType::OP_SUB)) {
+    while (pos < tokens.size() &&
+           (tokens[pos].type == TokenType::OP_ADD ||
+            tokens[pos].type == TokenType::OP_SUB)) {
         TokenType op = tokens[pos].type;
         pos++;
-        auto right = parseTerm(tokens, pos, symbols);
-        if (!right) return std::nullopt;
+        auto right = parseTerm(tokens, pos, symbols, errPrinted);
+        if (!right) return nullopt;
 
-        if (left->type == VarType::FLOAT || right->type == VarType::FLOAT) {
-            *left = castToFloat(*left);
-            *right = castToFloat(*right);
+        if (left->type != right->type) {
+            cout << "SNOL> Error! Operands must be of the same type in an arithmetic operation!\n";
+            errPrinted = true;
+            return nullopt;
+        }
+        if (left->type == VarType::FLOAT) {
             if (op == TokenType::OP_ADD) left->f_val += right->f_val;
             else left->f_val -= right->f_val;
         } else {
@@ -105,6 +136,27 @@ optional<EvalResult> evaluateExpression(const vector<Token>& tokens, size_t& pos
         }
     }
     return left;
+}
+
+static bool isValidIntegerInput(const string& s) {
+    if (s.empty()) return false;
+    size_t i = 0;
+    if (s[i] == '-') i++;
+    if (i >= s.size() || !isdigit((unsigned char)s[i])) return false;
+    while (i < s.size() && isdigit((unsigned char)s[i])) i++;
+    return i == s.size();
+}
+
+static bool isValidFloatInput(const string& s) {
+    if (s.empty()) return false;
+    size_t i = 0;
+    if (s[i] == '-') i++;
+    if (i >= s.size() || !isdigit((unsigned char)s[i])) return false;
+    while (i < s.size() && isdigit((unsigned char)s[i])) i++;
+    if (i >= s.size() || s[i] != '.') return false;
+    i++;
+    while (i < s.size() && isdigit((unsigned char)s[i])) i++;
+    return i == s.size();
 }
 
 void executeCommand(const vector<Token>& tokens, bool& should_exit, SymTable& symbols) {
@@ -133,17 +185,16 @@ void executeCommand(const vector<Token>& tokens, bool& should_exit, SymTable& sy
             cout << "SNOL> Unknown command! Does not match any valid command of the language.\n";
             return;
         }
-        cout << "Input for [" << tokens[1].value << "]: ";
+        cout << "SNOL> Please enter value for [" << tokens[1].value << "]\n";
+        cout << "Input: ";
         string input;
         getline(cin, input);
-        try {
-            if (input.find('.') != string::npos) {
-                symbols[tokens[1].value] = {VarType::FLOAT, 0, stod(input)};
-            } else {
-                symbols[tokens[1].value] = {VarType::INTEGER, stoll(input), 0.0};
-            }
-        } catch (...) {
-            cout << "SNOL> Invalid input value!\n";
+        if (isValidIntegerInput(input)) {
+            symbols[tokens[1].value] = {VarType::INTEGER, stoll(input), 0.0};
+        } else if (isValidFloatInput(input)) {
+            symbols[tokens[1].value] = {VarType::FLOAT, 0, stod(input)};
+        } else {
+            cout << "SNOL> Invalid input! Input must be a valid integer or floating-point value.\n";
         }
         return;
     }
@@ -157,15 +208,14 @@ void executeCommand(const vector<Token>& tokens, bool& should_exit, SymTable& sy
         if (tokens[1].type == TokenType::VARIABLE) {
             auto it = symbols.find(tokens[1].value);
             if (it == symbols.end()) {
-                cout << "SNOL> Undefined variable [" << tokens[1].value << "]\n";
+                cout << "SNOL> Error! [" << tokens[1].value << "] is not defined!\n";
             } else {
-                if (it->second.type == VarType::INTEGER) cout << it->second.i_val << endl;
-                else cout << it->second.f_val << endl;
+                cout << "SNOL> [" << tokens[1].value << "] = ";
+                if (it->second.type == VarType::INTEGER) cout << it->second.i_val << "\n";
+                else cout << it->second.f_val << "\n";
             }
-        } else if (tokens[1].type == TokenType::INT_LIT) {
-            cout << tokens[1].value << endl;
-        } else if (tokens[1].type == TokenType::FLOAT_LIT) {
-            cout << tokens[1].value << endl;
+        } else if (tokens[1].type == TokenType::INT_LIT || tokens[1].type == TokenType::FLOAT_LIT) {
+            cout << "SNOL> " << tokens[1].value << "\n";
         } else {
             cout << "SNOL> Unknown command! Does not match any valid command of the language.\n";
         }
@@ -173,24 +223,35 @@ void executeCommand(const vector<Token>& tokens, bool& should_exit, SymTable& sy
     }
 
     // var = expr
-    if (tokens.size() >= 3 && tokens[0].type == TokenType::VARIABLE && tokens[1].type == TokenType::OP_ASSIGN) {
+    if (tokens[0].type == TokenType::VARIABLE &&
+        tokens.size() >= 2 && tokens[1].type == TokenType::OP_ASSIGN) {
+        if (tokens.size() < 3) {
+            cout << "SNOL> Unknown command! Does not match any valid command of the language.\n";
+            return;
+        }
         size_t pos = 2;
-        auto res = evaluateExpression(tokens, pos, symbols);
+        bool errPrinted = false;
+        auto res = evaluateExpression(tokens, pos, symbols, errPrinted);
         if (res && pos == tokens.size()) {
             symbols[tokens[0].value] = {res->type, res->i_val, res->f_val};
             return;
         }
-        if (pos != tokens.size() && res) {
-             cout << "SNOL> Unknown command! Does not match any valid command of the language.\n";
-             return;
-        }
-        // If evaluateExpression failed, it might have already printed an error.
-        // If not, we report it.
-        if (!res) {
-             // Error already reported or general syntax error
+        if (!errPrinted) {
+            cout << "SNOL> Unknown command! Does not match any valid command of the language.\n";
         }
         return;
     }
 
-    cout << "SNOL> Unknown command! Does not match any valid command of the language.\n";
+    // Standalone expression: literal, variable, or arithmetic expression (no output on success)
+    {
+        size_t pos = 0;
+        bool errPrinted = false;
+        auto res = evaluateExpression(tokens, pos, symbols, errPrinted);
+        if (res && pos == tokens.size()) {
+            return;
+        }
+        if (!errPrinted) {
+            cout << "SNOL> Unknown command! Does not match any valid command of the language.\n";
+        }
+    }
 }

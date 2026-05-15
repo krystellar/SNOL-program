@@ -36,6 +36,7 @@ vector<Token> tokenize(const string& line) {
         if (c == '-') { tokens.push_back({TokenType::OP_SUB, "-"}); i++; continue; }
         if (c == '*') { tokens.push_back({TokenType::OP_MUL, "*"}); i++; continue; }
         if (c == '/') { tokens.push_back({TokenType::OP_DIV, "/"}); i++; continue; }
+        if (c == '%') { tokens.push_back({TokenType::OP_MOD, "%"}); i++; continue; }
         if (c == '(') { tokens.push_back({TokenType::LPAREN, "("}); i++; continue; }
         if (c == ')') { tokens.push_back({TokenType::RPAREN, ")"}); i++; continue; }
 
