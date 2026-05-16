@@ -1,3 +1,6 @@
+// AQUINO, MORAN, PEREZ
+// Implements tokenize(). Takes a raw input line and breaks it into a list of Token objects
+
 #include "lexer.h"
 #include <cctype>
 using namespace std;

@@ -1,3 +1,6 @@
+// AQUINO, MORAN, PEREZ
+// defines the symbol table
+
 #pragma once
 #include <map>
 #include <string>

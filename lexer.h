@@ -1,3 +1,6 @@
+// AQUINO, MORAN, PEREZ
+// defines the token types and data structures used by the lexer
+
 #pragma once
 #include <string>
 #include <vector>
